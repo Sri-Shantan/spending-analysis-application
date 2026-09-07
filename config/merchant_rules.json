@@ -1,0 +1,13 @@
+{
+  "rules": [
+    {"keywords": ["INSIGHT GLOBAL", "PAYROLL"], "category": "Income", "subcategory": "Payroll"},
+    {"keywords": ["COSTCO", "KROGER", "JAGDEEP'S INDIAN GROCERY", "GROCERY"], "category": "Groceries"},
+    {"keywords": ["AMAZON", "FABLETICS", "HOME DEPOT", "NORDSTROM", "NORDRACK"], "category": "Shopping"},
+    {"keywords": ["DOORDASH", "CHIPOTLE", "NAMASTE INDIA", "CINCY GOURMET DELI", "CURRITO", "TST*", "DD/BR"], "category": "Food"},
+    {"keywords": ["DUKEENERGY", "SPECTRUM", "GOOGLE ONE"], "category": "Bills"},
+    {"keywords": ["SHELL", "COSTCO GAS", "GAS #"], "category": "Gas"},
+    {"keywords": ["METROPOLIS PARKING", "PARKING"], "category": "Transportation", "subcategory": "Parking"},
+    {"keywords": ["LYFT"], "category": "Transportation", "subcategory": "Rideshare"},
+    {"keywords": ["PAYMENT TO CHASE CARD", "AMERICAN EXPRESS ACH PMT", "DISCOVER E-PAYMENT", "PAYMENT THANK YOU", "ONLINE PAYMENT, THANK YOU", "INTERNET PAYMENT - THANK YOU"], "category": "Transfer", "subcategory": "Credit Card Payment"}
+  ]
+}
