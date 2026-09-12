@@ -7,6 +7,7 @@ from src.parsers.base import StatementParser
 DATE_RE = re.compile(r"^(\d{2}/\d{2})\s+(.*)$")
 PERIOD_RE = re.compile(r"statement period (\w+ \d{2}, \d{4}) through (\w+ \d{2}, \d{4})", re.I)
 AMOUNT_RE = re.compile(r"[+-]?\$?[\d,]+\.\d{2}")
+PAGE_RE = re.compile(r"^---\s*Page\s+\d+\s+---$", re.I)
 
 
 class ChaseCheckingParser(StatementParser):
@@ -35,10 +36,16 @@ class ChaseCheckingParser(StatementParser):
 
             # A Chase transaction has a posted date, a description that may
             # wrap across lines, then transaction amount and running balance.
+            # Stop at page boundaries so footer text cannot be mistaken for part
+            # of the transaction and introduce unrelated monetary values.
             parts = [first_text]
             j = i + 1
             while j < len(lines) and not DATE_RE.match(lines[j]):
+                if PAGE_RE.match(lines[j]):
+                    break
                 if lines[j] in {"*start*transactiondetail", "*end*transaction detail"}:
+                    break
+                if lines[j].startswith("Ending Balance"):
                     break
                 parts.append(lines[j])
                 j += 1
