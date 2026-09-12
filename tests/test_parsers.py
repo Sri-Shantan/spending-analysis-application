@@ -80,12 +80,21 @@ DATE DESCRIPTION AMOUNT BALANCE
     assert tx[0].posted_date.isoformat()=="2026-08-19"
 
 
-def test_chase_checking_preserves_negative_transaction_amount_and_removes_balance():
+def test_chase_checking_preserves_negative_transaction_amount_and_stops_at_page_boundary():
     text="""Chase College Checking
 STATEMENT PERIOD August 06, 2026 through September 03, 2026
 TRANSACTION DETAIL
 DATE DESCRIPTION AMOUNT BALANCE
 09/03 Card Purchase 09/01 Homedepot.Com 800-466-3337 GA Card 1256 -32.31 5,231.67
+--- Page 3 ---
+18848630202000000062
+3 4Page of
+*start*dreportraitdisclosure message area
+*end*dreportraitdisclosure message area
+August 06, 2026 through September 03, 2026
+Account Number: 000000768711936
+IN CASE OF ERRORS OR QUESTIONS ABOUT YOUR ELECTRONIC FUNDS TRANSFERS:
+Call us at 1-866-564-2262 or write us at the address on the front of this statement.
 """
     tx = ChaseCheckingParser().parse(text)
 
@@ -93,5 +102,6 @@ DATE DESCRIPTION AMOUNT BALANCE
     assert tx[0].transaction_date.isoformat() == "2026-09-01"
     assert tx[0].posted_date.isoformat() == "2026-09-03"
     assert tx[0].amount == Decimal("-32.31")
+    assert tx[0].transaction_type.value == "EXPENSE"
     assert tx[0].description == "Card Purchase 09/01 Homedepot.Com 800-466-3337 GA Card 1256"
     assert tx[0].merchant == "09/01 Homedepot.Com 800-466-3337 GA Card 1256"
