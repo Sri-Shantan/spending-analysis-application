@@ -5,6 +5,7 @@ from src.categorizer import categorize, load_rules
 from src.database import connect, insert_transactions, register_statement
 from src.excel_exporter import export
 from src.pdf_reader import extract_pdf_text
+from src.reconciliation import reconcile_statement
 from src.statement_metadata import extract_statement_period
 from src.text_reader import read_statement_text
 from src.parsers.chase_checking import ChaseCheckingParser
@@ -37,8 +38,11 @@ def main():
             print(f"{path.name}: already ingested; skipped")
             continue
         txs=[categorize(t,rules) for t in txs]
-        total += insert_transactions(conn,txs,statement_id=statement_id)
+        inserted=insert_transactions(conn,txs,statement_id=statement_id)
+        total += inserted
+        result=reconcile_statement(conn,statement_id,len(txs),inserted)
         print(f"{path.name}: {len(txs)} parsed ({account})")
+        print(f"  reconciliation: {result.status.value}; inserted={result.inserted_count}; duplicates={result.duplicate_count}; needs_review={result.needs_review_count}")
     export(conn,args.excel); print(f"Inserted {total} new transactions")
 
 if __name__=="__main__": main()
