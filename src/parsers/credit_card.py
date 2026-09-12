@@ -131,7 +131,7 @@ class AmexParser(CreditCardParser):
         while i<end:
             m=self.AMEX_DATE_RE.match(lines[i])
             if not m: i+=1; continue
-            datestr,rest=m.groups(); amount,clean=trailing_amount(rest); parts=[clean]; j=i
+            datestr,rest=m.groups(); amount,clean=trailing_amount(rest); parts=[clean]; j=i+1
             while amount is None and j<end and not self.AMEX_DATE_RE.match(lines[j]):
                 c=lines[j]; a,cl=trailing_amount(c)
                 if a is not None: amount=a; parts.append(cl); break
