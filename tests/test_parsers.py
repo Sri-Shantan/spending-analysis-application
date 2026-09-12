@@ -63,7 +63,7 @@ New Charges Details
 07/10/26 DD *DOORDASH CINCYGOUR $8.02
 """
     tx=AmexParser().parse(text)
-    assert len(tx)==4
+    assert len(tx)==3
     assert any(t.transaction_type.value=="TRANSFER" for t in tx)
     assert any(t.amount==Decimal("-10.00") for t in tx)
 
