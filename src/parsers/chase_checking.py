@@ -29,13 +29,12 @@ class ChaseCheckingParser(StatementParser):
                 continue
 
             posted_mmdd, first_text = m.groups()
-            # Skip statement summary/footer dates that are not transaction rows.
             if first_text.startswith(("Beginning Balance", "Ending Balance")):
                 i += 1
                 continue
 
-            # A Chase transaction consists of a posted date, a description that
-            # may wrap across lines, then transaction amount and running balance.
+            # A Chase transaction has a posted date, a description that may
+            # wrap across lines, then transaction amount and running balance.
             parts = [first_text]
             j = i + 1
             while j < len(lines) and not DATE_RE.match(lines[j]):
@@ -44,20 +43,11 @@ class ChaseCheckingParser(StatementParser):
                 parts.append(lines[j])
                 j += 1
 
-            # The transaction amount and running balance are the final two
-            # monetary values in the assembled row. The description may itself
-            # contain numbers, so use the final pair rather than the first amount.
             row_text = " ".join(p for p in parts if p).strip()
-            amounts = list(AMOUNT_RE.finditer(row_text))
-            if len(amounts) < 2:
+            tx_amount, desc = self._extract_transaction_amount(row_text)
+            if tx_amount is None:
                 i = j if j > i else i + 1
                 continue
-
-            tx_amount_match = amounts[-2]
-            balance_match = amounts[-1]
-            tx_amount = Decimal(tx_amount_match.group(0).replace("$", "").replace(",", ""))
-            # Remove both amount and running balance from the description.
-            desc = (row_text[:tx_amount_match.start()] + row_text[balance_match.end():]).strip()
 
             posted = datetime.strptime(f"{posted_mmdd}/{year}", "%m/%d/%Y").date()
             embedded = re.search(
@@ -87,6 +77,24 @@ class ChaseCheckingParser(StatementParser):
             i = j if j > i else i + 1
 
         return out
+
+    @staticmethod
+    def _extract_transaction_amount(row_text: str):
+        """Return the transaction amount and description from a Chase row.
+
+        Chase places the transaction amount immediately before the final
+        running-balance value. Always use that penultimate monetary value so
+        the balance can never become the transaction amount.
+        """
+        amounts = list(AMOUNT_RE.finditer(row_text))
+        if len(amounts) < 2:
+            return None, row_text
+
+        tx_match = amounts[-2]
+        balance_match = amounts[-1]
+        tx_amount = Decimal(tx_match.group(0).replace("$", "").replace(",", ""))
+        desc = (row_text[:tx_match.start()] + row_text[balance_match.end():]).strip()
+        return tx_amount, desc
 
     @staticmethod
     def _statement_year(text: str) -> int:
