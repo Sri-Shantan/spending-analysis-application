@@ -1,13 +1,20 @@
 {
   "rules": [
     {"keywords": ["INSIGHT GLOBAL", "PAYROLL"], "category": "Income", "subcategory": "Payroll"},
-    {"keywords": ["COSTCO", "KROGER", "JAGDEEP'S INDIAN GROCERY", "GROCERY"], "category": "Groceries"},
-    {"keywords": ["AMAZON", "FABLETICS", "HOME DEPOT", "NORDSTROM", "NORDRACK"], "category": "Shopping"},
-    {"keywords": ["DOORDASH", "CHIPOTLE", "NAMASTE INDIA", "CINCY GOURMET DELI", "CURRITO", "TST*", "DD/BR"], "category": "Food"},
-    {"keywords": ["DUKEENERGY", "SPECTRUM", "GOOGLE ONE"], "category": "Bills"},
+    {"keywords": ["COSTCO", "KROGER", "JAGDEEP'S INDIAN GROCERY", "Jagdeep's", "GROCERY", "DESI PLAZA", "DESI MEATS LLC"], "category": "Groceries"},
+    {"keywords": ["AMAZON", "FABLETICS", "HOME DEPOT", "NORDSTROM", "NORDRACK", "SPENCER GIFTS"], "category": "Shopping"},
+    {"keywords": ["DOORDASH", "CHIPOTLE", "NAMASTE INDIA", "CINCY GOURMET DELI", "CURRITO", "TST*", "DD/BR", "CINCYGOURMETDELI", "SKYLINE CHILI"], "category": "Food"},
+    {"keywords": ["DUKEENERGY", "SPECTRUM", "GOOGLE ONE", "APPLE.COM/BILL", "Payrange", "Homedepot"], "category": "Bills"},
     {"keywords": ["SHELL", "COSTCO GAS", "GAS #"], "category": "Gas"},
-    {"keywords": ["METROPOLIS PARKING", "PARKING"], "category": "Transportation", "subcategory": "Parking"},
+    {"keywords": ["METROPOLIS PARKING", "PARKING", "NAP NOTL NEWPORT"], "category": "Transportation", "subcategory": "Parking"},
     {"keywords": ["LYFT"], "category": "Transportation", "subcategory": "Rideshare"},
+    {"keywords": ["THE PICKLE LODGE", "FULL THROTTLE"], "category": "Entertainment"},
+    {"keywords": ["QUANTUMNTS"], "category": "Entertainment", "subcategory": "TV"},
+    {"keywords": ["ATM.TK CA"], "category": "Entertainment", "subcategory": "Movies"},
+    {"keywords": ["CRUNCH FITNESS"], "category": "Fitness", "subcategory": "Gym"},
+    {"keywords": ["Fan-Pledge"], "category": "Donations"},
+    {"keywords": ["Zelle Payment To"], "category": "Zelle Payments", "subcategory": "Sent"},
+    {"keywords": ["Zelle Payment From"], "category": "Zelle Payments", "subcategory": "Receive"},
     {"keywords": ["PAYMENT TO CHASE CARD", "AMERICAN EXPRESS ACH PMT", "DISCOVER E-PAYMENT", "PAYMENT THANK YOU", "ONLINE PAYMENT, THANK YOU", "INTERNET PAYMENT - THANK YOU"], "category": "Transfer", "subcategory": "Credit Card Payment"}
   ]
 }

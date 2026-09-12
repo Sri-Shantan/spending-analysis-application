@@ -8,3 +8,4 @@ statements/*.pdf
 statements/*.txt
 processed/
 failed/
+debug/
