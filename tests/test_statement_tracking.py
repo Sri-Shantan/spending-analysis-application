@@ -1,3 +1,4 @@
+from src.categorizer import recategorize_transactions
 from src.database import connect, insert_transactions, register_statement
 from src.models import Transaction, TransactionType
 from src.reconciliation import ReconciliationStatus, reconcile_statement
@@ -49,6 +50,41 @@ def _make_tx(description="Test merchant", amount="-10.00", needs_review=False):
         category="Shopping",
         needs_review=needs_review,
     )
+
+
+def test_recategorize_existing_transactions(tmp_path):
+    conn = connect(tmp_path / "spending.db")
+    statement_id, _ = register_statement(conn, "statement.txt", "Chase Checking", None, None, "recat-1")
+    tx = _make_tx("NEW MERCHANT", "-12.00", needs_review=True)
+    tx = Transaction(**{**tx.__dict__, "category": "Uncategorized"})
+    assert insert_transactions(conn, [tx], statement_id=statement_id) == 1
+
+    updated = recategorize_transactions(
+        conn,
+        {"rules": [{"keywords": ["NEW MERCHANT"], "category": "Shopping", "subcategory": "Online"}]},
+    )
+
+    assert updated == 1
+    row = conn.execute(
+        "SELECT category, subcategory, needs_review FROM transactions WHERE id = 1"
+    ).fetchone()
+    assert row == ("Shopping", "Online", 0)
+
+
+def test_recategorize_leaves_unmatched_transaction_uncategorized(tmp_path):
+    conn = connect(tmp_path / "spending.db")
+    statement_id, _ = register_statement(conn, "statement.txt", "Chase Checking", None, None, "recat-2")
+    tx = _make_tx("UNKNOWN MERCHANT", "-15.00", needs_review=True)
+    tx = Transaction(**{**tx.__dict__, "category": "Uncategorized"})
+    assert insert_transactions(conn, [tx], statement_id=statement_id) == 1
+
+    updated = recategorize_transactions(conn, {"rules": []})
+
+    assert updated == 0
+    row = conn.execute(
+        "SELECT category, subcategory, needs_review FROM transactions WHERE id = 1"
+    ).fetchone()
+    assert row == ("Uncategorized", None, 1)
 
 
 def test_reconciliation_reconciled(tmp_path):

@@ -1,7 +1,7 @@
 import argparse
 import hashlib
 from pathlib import Path
-from src.categorizer import categorize, load_rules
+from src.categorizer import categorize, load_rules, recategorize_transactions
 from src.data_quality import validate_statement
 from src.database import connect, insert_transactions, register_statement
 from src.excel_exporter import export
@@ -29,9 +29,17 @@ def main():
     ap.add_argument("--db", default="database/spending.db")
     ap.add_argument("--excel", default="output/spending.xlsx")
     ap.add_argument("--rules", default="config/merchant_rules.json")
+    ap.add_argument("--recategorize", action="store_true", help="Re-apply merchant rules to existing transactions")
     args = ap.parse_args()
     rules = load_rules(args.rules)
     conn = connect(args.db)
+
+    if args.recategorize:
+        updated = recategorize_transactions(conn, rules)
+        export(conn, args.excel)
+        print(f"Re-categorized {updated} transactions")
+        return
+
     total = 0
     paths = sorted([*Path(args.input).glob("*.pdf"), *Path(args.input).glob("*.txt")])
 
