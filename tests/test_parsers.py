@@ -50,6 +50,39 @@ Travel/Entertainment $360.00
     assert len(tx)==3 and tx[0].transaction_type.value=="TRANSFER" and tx[1].category=="Bills"
 
 
+def test_discover_uses_statement_period_instead_of_unrelated_future_year():
+    text="""DISCOVER IT CARD
+Your next automatic payment will be on April 22, 2027.
+OPEN TO CLOSE DATE: 07/26/2026 - 08/25/2026
+TRANS.
+DATE PURCHASES MERCHANT CATEGORY AMOUNT
+07/26 INTERNET PAYMENT - THANK YOU -$268.75
+08/05 APPLE.COM/BILL Merchandise $14.38
+08/23 APPLE.COM/BILL Merchandise $21.31
+"""
+    tx=DiscoverParser().parse(text)
+    assert [item.transaction_date.isoformat() for item in tx] == [
+        "2026-07-26",
+        "2026-08-05",
+        "2026-08-23",
+    ]
+
+
+def test_discover_resolves_dates_across_calendar_years():
+    text="""DISCOVER IT CARD
+OPEN TO CLOSE DATE: 12/26/2025 - 01/25/2026
+TRANS.
+DATE PURCHASES MERCHANT CATEGORY AMOUNT
+12/30 STORE A Merchandise $10.00
+01/03 STORE B Merchandise $20.00
+"""
+    tx=DiscoverParser().parse(text)
+    assert [item.transaction_date.isoformat() for item in tx] == [
+        "2025-12-30",
+        "2026-01-03",
+    ]
+
+
 def test_amex():
     text="""Blue Cash Everyday
 Payments Details
