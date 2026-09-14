@@ -12,6 +12,11 @@ def test_extract_statement_period():
     assert extract_statement_period(text) == ("2026-08-06", "2026-09-03")
 
 
+def test_extract_discover_open_to_close_period():
+    text = "OPEN TO CLOSE DATE: 07/26/2026 - 08/25/2026"
+    assert extract_statement_period(text) == ("2026-07-26", "2026-08-25")
+
+
 def test_statement_registration_is_idempotent(tmp_path):
     conn = connect(tmp_path / "spending.db")
     first = register_statement(conn, "statement.txt", "Chase Checking", "2026-08-06", "2026-09-03", "abc")

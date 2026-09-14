@@ -1,8 +1,9 @@
 import re
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
+from src.statement_metadata import extract_statement_period
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})(?:\*)?\s+(.*)$")
 AMOUNT_RE = re.compile(r"^([+-])?\$?([\d,]+\.\d{2})$")
@@ -25,6 +26,24 @@ class CreditCardParser(StatementParser):
     def _year(self, text):
         years = [int(y) for y in re.findall(r"\b20\d{2}\b", text)]
         return max(years) if years else datetime.now().year
+    def _date(self, mmdd: str, text: str) -> date:
+        statement_start, statement_end = extract_statement_period(text)
+        if statement_start and statement_end:
+            start = date.fromisoformat(statement_start)
+            end = date.fromisoformat(statement_end)
+            month, day = (int(value) for value in mmdd.split("/"))
+            candidates = []
+            for year in {start.year, end.year}:
+                try:
+                    candidate = date(year, month, day)
+                except ValueError:
+                    continue
+                if start <= candidate <= end:
+                    candidates.append(candidate)
+            if len(candidates) == 1:
+                return candidates[0]
+            raise ValueError(f"Transaction date {mmdd} is outside statement period {start} to {end}")
+        return datetime.strptime(f"{mmdd}/{self._year(text)}", "%m/%d/%Y").date()
     @staticmethod
     def _merchant(description): return re.sub(r"\s+", " ", description).strip()
     @staticmethod
@@ -52,7 +71,7 @@ class ChaseCreditParser(CreditCardParser):
     account_name = "Chase Credit Card"
     def can_parse(self, text): return "CHASE FREEDOM UNLIMITED" in text and "Date of" in text and "Transaction Merchant" in text
     def parse(self, text, source_file=None):
-        lines=[x.strip() for x in text.splitlines()]; year=self._year(text); out=[]
+        lines=[x.strip() for x in text.splitlines()]; out=[]
         start=next((i for i,x in enumerate(lines) if x.startswith("Date of")),-1); i=start+1 if start>=0 else len(lines)
         while i<len(lines):
             m=DATE_RE.match(lines[i])
@@ -67,7 +86,7 @@ class ChaseCreditParser(CreditCardParser):
                     j+=1
                 desc=" ".join(parts).strip()
             if amount is None: i+=1; continue
-            dt=datetime.strptime(f"{mmdd}/{year}","%m/%d/%Y").date(); tt,cat=self._classify(desc,amount)
+            dt=self._date(mmdd,text); tt,cat=self._classify(desc,amount)
             if cat=="Uncategorized": cat=self._category(desc)
             normalized=-amount if tt==TransactionType.EXPENSE and amount>0 else (abs(amount) if tt==TransactionType.TRANSFER else amount)
             out.append(Transaction(dt,None,desc,self._merchant(desc),normalized,self.account_name,tt,cat,source_file=source_file)); i=j+1
@@ -78,7 +97,7 @@ class CitiParser(CreditCardParser):
     account_name="Citi Credit Card"
     def can_parse(self,text): return "Citi Diamond Preferred" in text and "Trans." in text and "Payments, Credits and Adjustments" in text
     def parse(self,text,source_file=None):
-        lines=[x.strip() for x in text.splitlines()]; year=self._year(text); out=[]
+        lines=[x.strip() for x in text.splitlines()]; out=[]
         start=next((i for i,x in enumerate(lines) if x=="Payments, Credits and Adjustments"),-1); i=start+1 if start>=0 else len(lines)
         while i<len(lines):
             if not re.fullmatch(r"\d{2}/\d{2}",lines[i]): i+=1; continue
@@ -91,7 +110,7 @@ class CitiParser(CreditCardParser):
                 if c not in {"Standard P","urchases","Standard Purchases","Fees Charged","Interest Charged","Date","Description","Amount"} and c: parts.append(c)
                 j+=1
             if amount is None: i+=1; continue
-            dt=datetime.strptime(f"{mmdd}/{year}","%m/%d/%Y").date(); posted=datetime.strptime(f"{posted_str or mmdd}/{year}","%m/%d/%Y").date(); tt,cat=self._classify(" ".join(parts),amount)
+            dt=self._date(mmdd,text); posted=self._date(posted_str or mmdd,text); tt,cat=self._classify(" ".join(parts),amount)
             if tt==TransactionType.EXPENSE: cat=self._category(" ".join(parts))
             normalized=-amount if tt==TransactionType.EXPENSE and amount>0 else (abs(amount) if tt==TransactionType.TRANSFER else amount)
             out.append(Transaction(dt,posted if posted!=dt else None," ".join(parts),self._merchant(" ".join(parts)),normalized,self.account_name,tt,cat,source_file=source_file)); i=j+1
@@ -102,7 +121,7 @@ class DiscoverParser(CreditCardParser):
     account_name="Discover Credit Card"
     def can_parse(self,text): return "DISCOVER IT CARD" in text and "DATE PURCHASES MERCHANT CATEGORY AMOUNT" in text
     def parse(self,text,source_file=None):
-        lines=[x.strip() for x in text.splitlines()]; year=self._year(text); out=[]
+        lines=[x.strip() for x in text.splitlines()]; out=[]
         start=next((i for i,x in enumerate(lines) if x=="DATE PURCHASES MERCHANT CATEGORY AMOUNT" and i>0 and lines[i-1]=="TRANS."),-1)
         if start<0:return out
         for i in range(start+1,len(lines)):
@@ -115,7 +134,7 @@ class DiscoverParser(CreditCardParser):
                 if c and not c.startswith(("TOTAL ","PREVIOUS BALANCE")): parts.append(c)
                 j+=1
             if amount is None: continue
-            desc=re.sub(r"^.*?\+\$[\d.]+",""," ".join(parts)).strip(); dt=datetime.strptime(f"{mmdd}/{year}","%m/%d/%Y").date(); tt,cat=self._classify(desc,amount)
+            desc=re.sub(r"^.*?\+\$[\d.]+",""," ".join(parts)).strip(); dt=self._date(mmdd,text); tt,cat=self._classify(desc,amount)
             if tt==TransactionType.EXPENSE: cat=self._category(desc)
             normalized=-amount if tt==TransactionType.EXPENSE and amount>0 else (abs(amount) if tt==TransactionType.TRANSFER else amount)
             out.append(Transaction(dt,None,desc,self._merchant(desc),normalized,self.account_name,tt,cat,source_file=source_file))
