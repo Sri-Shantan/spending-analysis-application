@@ -140,6 +140,35 @@ Call us at 1-866-564-2262 or write us at the address on the front of this statem
     assert tx[0].merchant == "09/01 Homedepot.Com 800-466-3337 GA Card 1256"
 
 
+def test_chase_checking_preserves_negative_amount_with_space_after_sign():
+    text="""Chase College Checking
+June 13, 2026 through July 14, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+06/16 Card Purchase 06/14 Maceys Inc West Jordan UT Card 9326 - 4.69 6,170.22
+"""
+    tx = ChaseCheckingParser().parse(text)
+
+    assert tx[0].amount == Decimal("-4.69")
+    assert tx[0].transaction_type.value == "EXPENSE"
+
+
+def test_chase_checking_classifies_zelle_by_direction():
+    text="""Chase College Checking
+June 13, 2026 through July 14, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+06/15 Zelle Payment To Friend ABC123 - 20.24 6,237.53
+06/30 Zelle Payment From Friend XYZ789 500.00 2,997.32
+"""
+    tx = ChaseCheckingParser().parse(text)
+
+    assert [(item.amount, item.transaction_type.value) for item in tx] == [
+        (Decimal("-20.24"), "EXPENSE"),
+        (Decimal("500.00"), "INCOME"),
+    ]
+
+
 def test_chase_checking_uses_bare_period_instead_of_zip_code_year():
     text="""Chase College Checking
 JPMorgan Chase Bank, N.A.
