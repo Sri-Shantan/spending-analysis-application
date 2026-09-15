@@ -13,6 +13,36 @@ class StatementMetadata:
     statement_hash: str
 
 
+@dataclass(frozen=True)
+class StatementDateResolver:
+    """Resolve transaction dates consistently across statement parsers."""
+
+    statement_start: Optional[str]
+    statement_end: Optional[str]
+
+    @classmethod
+    def from_text(cls, text: str) -> "StatementDateResolver":
+        return cls(*extract_statement_period(text))
+
+    def resolve(self, value: str, fallback_year: Optional[int] = None) -> date:
+        """Resolve MM/DD within the statement period, or accept a full date."""
+        for date_format in ("%m/%d/%Y", "%m/%d/%y"):
+            try:
+                return datetime.strptime(value, date_format).date()
+            except ValueError:
+                pass
+
+        if self.statement_start and self.statement_end:
+            return resolve_partial_date(value, self.statement_start, self.statement_end)
+        if fallback_year is None:
+            raise ValueError("Could not determine statement period")
+        return datetime.strptime(f"{value}/{fallback_year}", "%m/%d/%Y").date()
+
+    @staticmethod
+    def resolve_near(value: str, reference: date, max_distance_days: int = 31) -> date:
+        return resolve_near_date(value, reference, max_distance_days)
+
+
 def extract_statement_period(text: str) -> tuple[Optional[str], Optional[str]]:
     """Extract the full period covered by one or more statement ranges."""
     patterns = [

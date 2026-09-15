@@ -2,7 +2,7 @@ import re
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
-from src.statement_metadata import extract_statement_period, resolve_near_date, resolve_partial_date
+from src.statement_metadata import StatementDateResolver, extract_statement_period
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})\s+(.*)$")
 AMOUNT_RE = re.compile(r"[+-]?\$?[\d,]+\.\d{2}")
@@ -63,14 +63,15 @@ class ChaseCheckingParser(StatementParser):
 
             if not statement_start or not statement_end:
                 raise ValueError("Could not determine Chase statement period")
-            posted = resolve_partial_date(posted_mmdd, statement_start, statement_end)
+            resolver = StatementDateResolver(statement_start, statement_end)
+            posted = resolver.resolve(posted_mmdd)
             embedded = re.search(
                 r"(?:Card Purchase|Recurring Card Purchase|Card Purchase With Pin)\s+(\d{2}/\d{2})\s+",
                 desc,
                 re.I,
             )
             tx_date = (
-                resolve_near_date(embedded.group(1), posted)
+                resolver.resolve_near(embedded.group(1), posted)
                 if embedded
                 else posted
             )

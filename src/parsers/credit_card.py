@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
-from src.statement_metadata import extract_statement_period, resolve_partial_date
+from src.statement_metadata import StatementDateResolver
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})(?:\*)?\s+(.*)$")
 AMOUNT_RE = re.compile(r"^([+-])?\$?([\d,]+\.\d{2})$")
@@ -26,11 +26,8 @@ class CreditCardParser(StatementParser):
     def _year(self, text):
         years = [int(y) for y in re.findall(r"\b20\d{2}\b", text)]
         return max(years) if years else datetime.now().year
-    def _date(self, mmdd: str, text: str) -> date:
-        statement_start, statement_end = extract_statement_period(text)
-        if statement_start and statement_end:
-            return resolve_partial_date(mmdd, statement_start, statement_end)
-        return datetime.strptime(f"{mmdd}/{self._year(text)}", "%m/%d/%Y").date()
+    def _date(self, value: str, text: str) -> date:
+        return StatementDateResolver.from_text(text).resolve(value, self._year(text))
     @staticmethod
     def _merchant(description): return re.sub(r"\s+", " ", description).strip()
     @staticmethod
@@ -144,7 +141,7 @@ class AmexParser(CreditCardParser):
                 if c and not c.startswith("Total "): parts.append(c)
                 j+=1
             if amount is None: i+=1; continue
-            dt=datetime.strptime(datestr,"%m/%d/%y").date(); desc=" ".join(p for p in parts if p).strip()
+            dt=self._date(datestr, ""); desc=" ".join(p for p in parts if p).strip()
             if kind=="charge": tt,cat,normalized=TransactionType.EXPENSE,self._category(desc),-abs(amount)
             elif "PAYMENT" in desc.upper(): tt,cat,normalized=TransactionType.TRANSFER,"Credit Card Payment",abs(amount)
             else: tt,cat,normalized=TransactionType.ADJUSTMENT,"Refund/Credit",abs(amount)
