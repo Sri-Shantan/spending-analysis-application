@@ -3,24 +3,10 @@ from datetime import date, datetime
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
+from src.parsers.common import FULL_MONEY_RE, trailing_money
 from src.statement_metadata import StatementDateResolver
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})(?:\*)?\s+(.*)$")
-AMOUNT_RE = re.compile(r"^([+-])?\$?([\d,]+\.\d{2})$")
-TRAILING_AMOUNT_RE = re.compile(r"([+-]?\$?[\d,]+\.\d{2})\s*$")
-
-
-def money(s: str) -> Decimal:
-    negative = s.strip().startswith("-")
-    value = Decimal(s.strip().lstrip("+-").replace("$", "").replace(",", ""))
-    return -value if negative else value
-
-
-def trailing_amount(text: str):
-    m = TRAILING_AMOUNT_RE.search(text)
-    return (money(m.group(1)), text[:m.start()].strip()) if m else (None, text)
-
-
 class CreditCardParser(StatementParser):
     issuer: str
     def _year(self, text):
@@ -60,11 +46,11 @@ class ChaseCreditParser(CreditCardParser):
         while i<len(lines):
             m=DATE_RE.match(lines[i])
             if not m: i+=1; continue
-            mmdd,rest=m.groups(); amount,desc=trailing_amount(rest); j=i
+            mmdd,rest=m.groups(); amount,desc=trailing_money(rest); j=i
             if amount is None:
                 parts=[rest]
                 while j<len(lines) and not DATE_RE.match(lines[j]):
-                    a,c=trailing_amount(lines[j])
+                    a,c=trailing_money(lines[j])
                     if a is not None: amount=a; parts.append(c); break
                     if lines[j] and not lines[j].startswith("Total "): parts.append(lines[j])
                     j+=1
@@ -90,7 +76,7 @@ class CitiParser(CreditCardParser):
             parts=[]; amount=None
             while j<len(lines) and not re.fullmatch(r"\d{2}/\d{2}",lines[j]):
                 c=lines[j]
-                if AMOUNT_RE.match(c): amount=money(c); break
+                if FULL_MONEY_RE.match(c): amount=trailing_money(c)[0]; break
                 if c not in {"Standard P","urchases","Standard Purchases","Fees Charged","Interest Charged","Date","Description","Amount"} and c: parts.append(c)
                 j+=1
             if amount is None: i+=1; continue
@@ -111,9 +97,9 @@ class DiscoverParser(CreditCardParser):
         for i in range(start+1,len(lines)):
             m=re.search(r"(\d{2}/\d{2})\s+(.*)$",lines[i])
             if not m: continue
-            mmdd,rest=m.groups(); amount,clean=trailing_amount(rest); parts=[clean]; j=i+1
+            mmdd,rest=m.groups(); amount,clean=trailing_money(rest); parts=[clean]; j=i+1
             while amount is None and j<len(lines) and not re.search(r"^\d{2}/\d{2}\s+",lines[j]):
-                c=lines[j]; a,cl=trailing_amount(c)
+                c=lines[j]; a,cl=trailing_money(c)
                 if a is not None: amount=a; parts.append(cl); break
                 if c and not c.startswith(("TOTAL ","PREVIOUS BALANCE")): parts.append(c)
                 j+=1
@@ -134,9 +120,9 @@ class AmexParser(CreditCardParser):
         while i<end:
             m=self.AMEX_DATE_RE.match(lines[i])
             if not m: i+=1; continue
-            datestr,rest=m.groups(); amount,clean=trailing_amount(rest); parts=[clean]; j=i+1
+            datestr,rest=m.groups(); amount,clean=trailing_money(rest); parts=[clean]; j=i+1
             while amount is None and j<end and not self.AMEX_DATE_RE.match(lines[j]):
-                c=lines[j]; a,cl=trailing_amount(c)
+                c=lines[j]; a,cl=trailing_money(c)
                 if a is not None: amount=a; parts.append(cl); break
                 if c and not c.startswith("Total "): parts.append(c)
                 j+=1

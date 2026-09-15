@@ -2,10 +2,10 @@ import re
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
+from src.parsers.common import MONEY_RE, classify_direction, parse_money
 from src.statement_metadata import StatementDateResolver, extract_statement_period
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})\s+(.*)$")
-AMOUNT_RE = re.compile(r"(?:[+-]\s*)?\$?[\d,]+\.\d{2}")
 PAGE_RE = re.compile(r"^---\s*Page\s+\d+\s+---$", re.I)
 
 
@@ -101,15 +101,13 @@ class ChaseCheckingParser(StatementParser):
         running-balance value. Always use that penultimate monetary value so
         the balance can never become the transaction amount.
         """
-        amounts = list(AMOUNT_RE.finditer(row_text))
+        amounts = list(MONEY_RE.finditer(row_text))
         if len(amounts) < 2:
             return None, row_text
 
         tx_match = amounts[-2]
         balance_match = amounts[-1]
-        tx_amount = Decimal(
-            tx_match.group(0).replace("$", "").replace(",", "").replace(" ", "")
-        )
+        tx_amount = parse_money(tx_match.group(0))
         desc = (row_text[:tx_match.start()] + row_text[balance_match.end():]).strip()
         return tx_amount, desc
 
@@ -127,10 +125,9 @@ class ChaseCheckingParser(StatementParser):
         d = description.upper()
         if "PAYROLL" in d:
             return TransactionType.INCOME, "Income"
-        if "ZELLE PAYMENT TO" in d or "ZELLE TO" in d:
-            return TransactionType.EXPENSE, "Zelle"
-        if "ZELLE PAYMENT FROM" in d or "ZELLE FROM" in d:
-            return TransactionType.INCOME, "Zelle"
+        direction = classify_direction(description)
+        if direction:
+            return direction
         if any(x in d for x in ("PAYMENT TO CHASE CARD", "AMERICAN EXPRESS ACH PMT", "DISCOVER E-PAYMENT")):
             return TransactionType.TRANSFER, "Credit Card Payment"
         if "ATM WITHDRAWAL" in d:
