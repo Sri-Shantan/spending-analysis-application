@@ -6,10 +6,10 @@ from src.database import connect, insert_transactions, register_statement
 from src.models import Transaction, TransactionType
 
 
-def _tx(day=1, needs_review=False):
+def _tx(day=1, posted_day=None, needs_review=False):
     return Transaction(
         transaction_date=date(2026, 8, day),
-        posted_date=None,
+        posted_date=date(2026, 8, posted_day) if posted_day else None,
         description="Test merchant",
         merchant="Test merchant",
         amount=Decimal("-10.00"),
@@ -40,6 +40,14 @@ def test_data_quality_flags_transaction_outside_period(tmp_path):
     result = validate_statement(conn, statement_id)
     assert not result.passed
     assert result.outside_period_count == 1
+
+
+def test_data_quality_uses_posted_date_for_statement_period(tmp_path):
+    conn = connect(tmp_path / "spending.db")
+    statement_id, _ = register_statement(conn, "statement.txt", "Chase Checking", "2026-08-02", "2026-08-31", "quality-posted")
+    insert_transactions(conn, [_tx(day=1, posted_day=2)], statement_id=statement_id)
+    result = validate_statement(conn, statement_id)
+    assert result.outside_period_count == 0
 
 
 def test_data_quality_flags_review_transactions(tmp_path):

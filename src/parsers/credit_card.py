@@ -3,7 +3,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
-from src.statement_metadata import extract_statement_period
+from src.statement_metadata import extract_statement_period, resolve_partial_date
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})(?:\*)?\s+(.*)$")
 AMOUNT_RE = re.compile(r"^([+-])?\$?([\d,]+\.\d{2})$")
@@ -29,20 +29,7 @@ class CreditCardParser(StatementParser):
     def _date(self, mmdd: str, text: str) -> date:
         statement_start, statement_end = extract_statement_period(text)
         if statement_start and statement_end:
-            start = date.fromisoformat(statement_start)
-            end = date.fromisoformat(statement_end)
-            month, day = (int(value) for value in mmdd.split("/"))
-            candidates = []
-            for year in {start.year, end.year}:
-                try:
-                    candidate = date(year, month, day)
-                except ValueError:
-                    continue
-                if start <= candidate <= end:
-                    candidates.append(candidate)
-            if len(candidates) == 1:
-                return candidates[0]
-            raise ValueError(f"Transaction date {mmdd} is outside statement period {start} to {end}")
+            return resolve_partial_date(mmdd, statement_start, statement_end)
         return datetime.strptime(f"{mmdd}/{self._year(text)}", "%m/%d/%Y").date()
     @staticmethod
     def _merchant(description): return re.sub(r"\s+", " ", description).strip()

@@ -42,7 +42,7 @@ def validate_statement(conn: sqlite3.Connection, statement_id: int) -> DataQuali
         """
         SELECT
             COUNT(*),
-            SUM(CASE WHEN (? IS NOT NULL AND transaction_date < ?) OR (? IS NOT NULL AND transaction_date > ?) THEN 1 ELSE 0 END),
+            SUM(CASE WHEN (? IS NOT NULL AND COALESCE(posted_date, transaction_date) < ?) OR (? IS NOT NULL AND COALESCE(posted_date, transaction_date) > ?) THEN 1 ELSE 0 END),
             SUM(CASE WHEN transaction_hash IS NULL OR transaction_hash = '' THEN 1 ELSE 0 END),
             SUM(CASE WHEN description IS NULL OR TRIM(description) = '' THEN 1 ELSE 0 END),
             SUM(CASE WHEN amount IS NULL THEN 1 ELSE 0 END),

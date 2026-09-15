@@ -17,6 +17,18 @@ def test_extract_discover_open_to_close_period():
     assert extract_statement_period(text) == ("2026-07-26", "2026-08-25")
 
 
+def test_extract_bare_chase_period():
+    text = "February 14, 2026 through March 13, 2026"
+    assert extract_statement_period(text) == ("2026-02-14", "2026-03-13")
+
+
+def test_extract_combined_statement_period_bounds():
+    text = """February 14, 2026 through March 13, 2026
+September 16, 2025 through October 15, 2025
+"""
+    assert extract_statement_period(text) == ("2025-09-16", "2026-03-13")
+
+
 def test_statement_registration_is_idempotent(tmp_path):
     conn = connect(tmp_path / "spending.db")
     first = register_statement(conn, "statement.txt", "Chase Checking", "2026-08-06", "2026-09-03", "abc")
