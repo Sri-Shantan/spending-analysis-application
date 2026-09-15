@@ -2,7 +2,7 @@ from src.categorizer import recategorize_transactions
 from src.database import connect, insert_transactions, register_statement
 from src.models import Transaction, TransactionType
 from src.reconciliation import ReconciliationStatus, reconcile_statement
-from src.statement_metadata import extract_statement_period
+from src.statement_metadata import StatementDateResolver, extract_statement_period
 from datetime import date
 from decimal import Decimal
 
@@ -15,6 +15,32 @@ def test_extract_statement_period():
 def test_extract_discover_open_to_close_period():
     text = "OPEN TO CLOSE DATE: 07/26/2026 - 08/25/2026"
     assert extract_statement_period(text) == ("2026-07-26", "2026-08-25")
+
+
+def test_extract_bare_chase_period():
+    text = "February 14, 2026 through March 13, 2026"
+    assert extract_statement_period(text) == ("2026-02-14", "2026-03-13")
+
+
+def test_extract_combined_statement_period_bounds():
+    text = """February 14, 2026 through March 13, 2026
+September 16, 2025 through October 15, 2025
+"""
+    assert extract_statement_period(text) == ("2025-09-16", "2026-03-13")
+
+
+def test_shared_date_resolver_handles_cross_year_partial_dates():
+    resolver = StatementDateResolver("2025-12-26", "2026-01-25")
+
+    assert resolver.resolve("12/30") == date(2025, 12, 30)
+    assert resolver.resolve("01/03") == date(2026, 1, 3)
+
+
+def test_shared_date_resolver_accepts_full_dates_for_any_parser():
+    resolver = StatementDateResolver(None, None)
+
+    assert resolver.resolve("07/09/26") == date(2026, 7, 9)
+    assert resolver.resolve("07/09/2026") == date(2026, 7, 9)
 
 
 def test_statement_registration_is_idempotent(tmp_path):

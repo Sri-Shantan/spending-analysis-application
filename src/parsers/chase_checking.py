@@ -1,12 +1,11 @@
 import re
-from datetime import datetime
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
+from src.parsers.common import MONEY_RE, classify_direction, parse_money
+from src.statement_metadata import StatementDateResolver, extract_statement_period
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})\s+(.*)$")
-PERIOD_RE = re.compile(r"statement period (\w+ \d{2}, \d{4}) through (\w+ \d{2}, \d{4})", re.I)
-AMOUNT_RE = re.compile(r"[+-]?\$?[\d,]+\.\d{2}")
 PAGE_RE = re.compile(r"^---\s*Page\s+\d+\s+---$", re.I)
 
 
@@ -18,12 +17,18 @@ class ChaseCheckingParser(StatementParser):
 
     def parse(self, text: str, source_file: str | None = None) -> list[Transaction]:
         lines = [x.strip() for x in text.splitlines()]
-        year = self._statement_year(text)
         out = []
         start = next((i for i, x in enumerate(lines) if x == "TRANSACTION DETAIL"), -1)
         i = start + 1 if start >= 0 else len(lines)
+        statement_start, statement_end = extract_statement_period("\n".join(lines[:i]))
 
         while i < len(lines):
+            page_start, page_end = extract_statement_period(lines[i])
+            if page_start and page_end:
+                statement_start, statement_end = page_start, page_end
+                i += 1
+                continue
+
             m = DATE_RE.match(lines[i])
             if not m:
                 i += 1
@@ -56,14 +61,17 @@ class ChaseCheckingParser(StatementParser):
                 i = j if j > i else i + 1
                 continue
 
-            posted = datetime.strptime(f"{posted_mmdd}/{year}", "%m/%d/%Y").date()
+            if not statement_start or not statement_end:
+                raise ValueError("Could not determine Chase statement period")
+            resolver = StatementDateResolver(statement_start, statement_end)
+            posted = resolver.resolve(posted_mmdd)
             embedded = re.search(
                 r"(?:Card Purchase|Recurring Card Purchase|Card Purchase With Pin)\s+(\d{2}/\d{2})\s+",
                 desc,
                 re.I,
             )
             tx_date = (
-                datetime.strptime(f"{embedded.group(1)}/{year}", "%m/%d/%Y").date()
+                resolver.resolve_near(embedded.group(1), posted)
                 if embedded
                 else posted
             )
@@ -93,23 +101,15 @@ class ChaseCheckingParser(StatementParser):
         running-balance value. Always use that penultimate monetary value so
         the balance can never become the transaction amount.
         """
-        amounts = list(AMOUNT_RE.finditer(row_text))
+        amounts = list(MONEY_RE.finditer(row_text))
         if len(amounts) < 2:
             return None, row_text
 
         tx_match = amounts[-2]
         balance_match = amounts[-1]
-        tx_amount = Decimal(tx_match.group(0).replace("$", "").replace(",", ""))
+        tx_amount = parse_money(tx_match.group(0))
         desc = (row_text[:tx_match.start()] + row_text[balance_match.end():]).strip()
         return tx_amount, desc
-
-    @staticmethod
-    def _statement_year(text: str) -> int:
-        m = PERIOD_RE.search(text)
-        if m:
-            return datetime.strptime(m.group(2), "%B %d, %Y").year
-        years = [int(y) for y in re.findall(r"\b20\d{2}\b", text)]
-        return max(years) if years else datetime.now().year
 
     @staticmethod
     def _merchant(description: str) -> str:
@@ -125,8 +125,9 @@ class ChaseCheckingParser(StatementParser):
         d = description.upper()
         if "PAYROLL" in d:
             return TransactionType.INCOME, "Income"
-        if "ZELLE" in d and amount > 0:
-            return TransactionType.INCOME, "Zelle"
+        direction = classify_direction(description)
+        if direction:
+            return direction
         if any(x in d for x in ("PAYMENT TO CHASE CARD", "AMERICAN EXPRESS ACH PMT", "DISCOVER E-PAYMENT")):
             return TransactionType.TRANSFER, "Credit Card Payment"
         if "ATM WITHDRAWAL" in d:

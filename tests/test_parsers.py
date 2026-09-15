@@ -138,3 +138,84 @@ Call us at 1-866-564-2262 or write us at the address on the front of this statem
     assert tx[0].transaction_type.value == "EXPENSE"
     assert tx[0].description == "Card Purchase 09/01 Homedepot.Com 800-466-3337 GA Card 1256"
     assert tx[0].merchant == "09/01 Homedepot.Com 800-466-3337 GA Card 1256"
+
+
+def test_chase_checking_preserves_negative_amount_with_space_after_sign():
+    text="""Chase College Checking
+June 13, 2026 through July 14, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+06/16 Card Purchase 06/14 Maceys Inc West Jordan UT Card 9326 - 4.69 6,170.22
+"""
+    tx = ChaseCheckingParser().parse(text)
+
+    assert tx[0].amount == Decimal("-4.69")
+    assert tx[0].transaction_type.value == "EXPENSE"
+
+
+def test_chase_checking_classifies_zelle_by_direction():
+    text="""Chase College Checking
+June 13, 2026 through July 14, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+06/15 Zelle Payment To Friend ABC123 - 20.24 6,237.53
+06/30 Zelle Payment From Friend XYZ789 500.00 2,997.32
+"""
+    tx = ChaseCheckingParser().parse(text)
+
+    assert [(item.amount, item.transaction_type.value) for item in tx] == [
+        (Decimal("-20.24"), "EXPENSE"),
+        (Decimal("500.00"), "INCOME"),
+    ]
+
+
+def test_chase_checking_uses_bare_period_instead_of_zip_code_year():
+    text="""Chase College Checking
+JPMorgan Chase Bank, N.A.
+Columbus, OH 43218 - 2051
+February 14, 2026 through March 13, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+02/17 Card Purchase 02/16 Chipotle -13.91 616.99
+"""
+    tx=ChaseCheckingParser().parse(text)
+    assert tx[0].transaction_date.isoformat() == "2026-02-16"
+    assert tx[0].posted_date.isoformat() == "2026-02-17"
+
+
+def test_chase_checking_tracks_periods_across_combined_statements():
+    text="""Chase College Checking
+December 13, 2025 through January 15, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+12/15 Card Purchase 12/14 Store A -10.00 100.00
+01/05 Card Purchase 01/03 Store B -20.00 80.00
+--- Page 2 ---
+February 14, 2026 through March 13, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+02/17 Card Purchase 02/16 Store C -30.00 50.00
+"""
+    tx=ChaseCheckingParser().parse(text)
+    assert [item.transaction_date.isoformat() for item in tx] == [
+        "2025-12-14",
+        "2026-01-03",
+        "2026-02-16",
+    ]
+    assert [item.posted_date.isoformat() for item in tx] == [
+        "2025-12-15",
+        "2026-01-05",
+        "2026-02-17",
+    ]
+
+
+def test_chase_checking_allows_purchase_date_before_period_start():
+    text="""Chase College Checking
+January 16, 2026 through February 13, 2026
+TRANSACTION DETAIL
+DATE DESCRIPTION AMOUNT BALANCE
+01/16 Card Purchase 01/15 Store A -10.00 100.00
+"""
+    tx=ChaseCheckingParser().parse(text)
+    assert tx[0].transaction_date.isoformat() == "2026-01-15"
+    assert tx[0].posted_date.isoformat() == "2026-01-16"

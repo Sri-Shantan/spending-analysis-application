@@ -3,47 +3,17 @@ from datetime import date, datetime
 from decimal import Decimal
 from src.models import Transaction, TransactionType
 from src.parsers.base import StatementParser
-from src.statement_metadata import extract_statement_period
+from src.parsers.common import FULL_MONEY_RE, trailing_money
+from src.statement_metadata import StatementDateResolver
 
 DATE_RE = re.compile(r"^(\d{2}/\d{2})(?:\*)?\s+(.*)$")
-AMOUNT_RE = re.compile(r"^([+-])?\$?([\d,]+\.\d{2})$")
-TRAILING_AMOUNT_RE = re.compile(r"([+-]?\$?[\d,]+\.\d{2})\s*$")
-
-
-def money(s: str) -> Decimal:
-    negative = s.strip().startswith("-")
-    value = Decimal(s.strip().lstrip("+-").replace("$", "").replace(",", ""))
-    return -value if negative else value
-
-
-def trailing_amount(text: str):
-    m = TRAILING_AMOUNT_RE.search(text)
-    return (money(m.group(1)), text[:m.start()].strip()) if m else (None, text)
-
-
 class CreditCardParser(StatementParser):
     issuer: str
     def _year(self, text):
         years = [int(y) for y in re.findall(r"\b20\d{2}\b", text)]
         return max(years) if years else datetime.now().year
-    def _date(self, mmdd: str, text: str) -> date:
-        statement_start, statement_end = extract_statement_period(text)
-        if statement_start and statement_end:
-            start = date.fromisoformat(statement_start)
-            end = date.fromisoformat(statement_end)
-            month, day = (int(value) for value in mmdd.split("/"))
-            candidates = []
-            for year in {start.year, end.year}:
-                try:
-                    candidate = date(year, month, day)
-                except ValueError:
-                    continue
-                if start <= candidate <= end:
-                    candidates.append(candidate)
-            if len(candidates) == 1:
-                return candidates[0]
-            raise ValueError(f"Transaction date {mmdd} is outside statement period {start} to {end}")
-        return datetime.strptime(f"{mmdd}/{self._year(text)}", "%m/%d/%Y").date()
+    def _date(self, value: str, text: str) -> date:
+        return StatementDateResolver.from_text(text).resolve(value, self._year(text))
     @staticmethod
     def _merchant(description): return re.sub(r"\s+", " ", description).strip()
     @staticmethod
@@ -76,11 +46,11 @@ class ChaseCreditParser(CreditCardParser):
         while i<len(lines):
             m=DATE_RE.match(lines[i])
             if not m: i+=1; continue
-            mmdd,rest=m.groups(); amount,desc=trailing_amount(rest); j=i
+            mmdd,rest=m.groups(); amount,desc=trailing_money(rest); j=i
             if amount is None:
                 parts=[rest]
                 while j<len(lines) and not DATE_RE.match(lines[j]):
-                    a,c=trailing_amount(lines[j])
+                    a,c=trailing_money(lines[j])
                     if a is not None: amount=a; parts.append(c); break
                     if lines[j] and not lines[j].startswith("Total "): parts.append(lines[j])
                     j+=1
@@ -106,7 +76,7 @@ class CitiParser(CreditCardParser):
             parts=[]; amount=None
             while j<len(lines) and not re.fullmatch(r"\d{2}/\d{2}",lines[j]):
                 c=lines[j]
-                if AMOUNT_RE.match(c): amount=money(c); break
+                if FULL_MONEY_RE.match(c): amount=trailing_money(c)[0]; break
                 if c not in {"Standard P","urchases","Standard Purchases","Fees Charged","Interest Charged","Date","Description","Amount"} and c: parts.append(c)
                 j+=1
             if amount is None: i+=1; continue
@@ -127,9 +97,9 @@ class DiscoverParser(CreditCardParser):
         for i in range(start+1,len(lines)):
             m=re.search(r"(\d{2}/\d{2})\s+(.*)$",lines[i])
             if not m: continue
-            mmdd,rest=m.groups(); amount,clean=trailing_amount(rest); parts=[clean]; j=i+1
+            mmdd,rest=m.groups(); amount,clean=trailing_money(rest); parts=[clean]; j=i+1
             while amount is None and j<len(lines) and not re.search(r"^\d{2}/\d{2}\s+",lines[j]):
-                c=lines[j]; a,cl=trailing_amount(c)
+                c=lines[j]; a,cl=trailing_money(c)
                 if a is not None: amount=a; parts.append(cl); break
                 if c and not c.startswith(("TOTAL ","PREVIOUS BALANCE")): parts.append(c)
                 j+=1
@@ -150,14 +120,14 @@ class AmexParser(CreditCardParser):
         while i<end:
             m=self.AMEX_DATE_RE.match(lines[i])
             if not m: i+=1; continue
-            datestr,rest=m.groups(); amount,clean=trailing_amount(rest); parts=[clean]; j=i+1
+            datestr,rest=m.groups(); amount,clean=trailing_money(rest); parts=[clean]; j=i+1
             while amount is None and j<end and not self.AMEX_DATE_RE.match(lines[j]):
-                c=lines[j]; a,cl=trailing_amount(c)
+                c=lines[j]; a,cl=trailing_money(c)
                 if a is not None: amount=a; parts.append(cl); break
                 if c and not c.startswith("Total "): parts.append(c)
                 j+=1
             if amount is None: i+=1; continue
-            dt=datetime.strptime(datestr,"%m/%d/%y").date(); desc=" ".join(p for p in parts if p).strip()
+            dt=self._date(datestr, ""); desc=" ".join(p for p in parts if p).strip()
             if kind=="charge": tt,cat,normalized=TransactionType.EXPENSE,self._category(desc),-abs(amount)
             elif "PAYMENT" in desc.upper(): tt,cat,normalized=TransactionType.TRANSFER,"Credit Card Payment",abs(amount)
             else: tt,cat,normalized=TransactionType.ADJUSTMENT,"Refund/Credit",abs(amount)
